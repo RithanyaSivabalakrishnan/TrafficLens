@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: trafficlens_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: trafficlens
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d trafficlens"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  user_service_1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.user_service --port 8001
+    ports:
+      - "8001:8001"
+
+  user_service_2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.user_service --port 8002
+    ports:
+      - "8002:8002"
+
+  order_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.order_service --port 8003
+    ports:
+      - "8003:8003"
+
+  notification_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.notification_service --port 8004
+    ports:
+      - "8004:8004"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m gateway.main
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@postgres:5432/trafficlens
+      GATEWAY_HOST: "0.0.0.0"
+      GATEWAY_PORT: "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m dashboard.api
+    ports:
+      - "8501:8501"
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@postgres:5432/trafficlens
+      DASHBOARD_HOST: "0.0.0.0"
+      DASHBOARD_PORT: "8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

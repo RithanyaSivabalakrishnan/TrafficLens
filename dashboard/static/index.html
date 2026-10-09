@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrafficLens – Gateway Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Header -->
+    <header>
+      <div class="brand-title">
+        <h1>TrafficLens</h1>
+        <div class="subtitle">Network-aware API gateway · traffic analytics</div>
+      </div>
+      <div class="header-controls">
+        <div class="status-badge" id="liveIndicator">
+          <span class="dot" id="liveDot"></span>
+          <span id="liveText">Live (1s polling)</span>
+        </div>
+        <button class="btn" id="btnDelayToggle" onclick="toggleDelayExperiment()">Add 300 ms delay to Orders</button>
+        <button class="btn danger" id="btnStopToggle" onclick="toggleStopExperiment()">Stop Notifications service</button>
+        <button class="btn" id="btnThemeToggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+      </div>
+    </header>
+
+    <!-- KPI Cards Grid -->
+    <section class="kpi-grid">
+      <div class="card kpi-card">
+        <span class="kpi-label">Total requests</span>
+        <span class="kpi-value" id="kpiTotalRequests">0</span>
+      </div>
+      <div class="card kpi-card">
+        <span class="kpi-label">Requests per second</span>
+        <span class="kpi-value" id="kpiRps">0.0</span>
+      </div>
+      <div class="card kpi-card">
+        <span class="kpi-label">Median latency (p50)</span>
+        <span class="kpi-value" id="kpiP50">0 ms</span>
+      </div>
+      <div class="card kpi-card">
+        <span class="kpi-label">p95 latency</span>
+        <span class="kpi-value" id="kpiP95">0 ms</span>
+      </div>
+      <div class="card kpi-card">
+        <span class="kpi-label">Error rate</span>
+        <span class="kpi-value" id="kpiErrorRate">0.0%</span>
+      </div>
+      <div class="card kpi-card">
+        <span class="kpi-label">Total bandwidth</span>
+        <span class="kpi-value" id="kpiBandwidth">0.0 KB</span>
+      </div>
+    </section>
+
+    <!-- Charts Section -->
+    <section class="grid-2col">
+      <!-- Latency Chart -->
+      <div class="card">
+        <div class="panel-title">
+          <span>Latency over the last 60 seconds</span>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: var(--secondary-accent);"></span> p50</div>
+            <div class="legend-item"><span class="legend-color" style="background: var(--primary-accent);"></span> p95</div>
+            <div class="legend-item"><span class="legend-color" style="background: var(--warning-accent);"></span> p99</div>
+          </div>
+        </div>
+        <div class="chart-container">
+          <svg class="chart-svg" id="latencyChartSvg" viewBox="0 0 500 180" preserveAspectRatio="none">
+            <!-- Rendered dynamically by app.js -->
+          </svg>
+        </div>
+      </div>
+
+      <!-- Throughput Chart -->
+      <div class="card">
+        <div class="panel-title">
+          <span>Throughput (Requests per second)</span>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: var(--primary-accent);"></span> RPS</div>
+          </div>
+        </div>
+        <div class="chart-container">
+          <svg class="chart-svg" id="throughputChartSvg" viewBox="0 0 500 180" preserveAspectRatio="none">
+            <!-- Rendered dynamically by app.js -->
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Distribution & Status Codes Section -->
+    <section class="grid-2col">
+      <!-- Traffic Distribution -->
+      <div class="card">
+        <div class="panel-title">Traffic distribution by backend endpoint</div>
+        <div class="progress-list" id="trafficDistList">
+          <div style="color: var(--muted-text); font-size: 12px;">Waiting for metric data...</div>
+        </div>
+      </div>
+
+      <!-- Status Codes Distribution -->
+      <div class="card">
+        <div class="panel-title">Status-code distribution</div>
+        <div class="stacked-bar-container">
+          <div class="stacked-segment segment-2xx" id="seg2xx" style="width: 100%;"></div>
+          <div class="stacked-segment segment-429" id="seg429" style="width: 0%;"></div>
+          <div class="stacked-segment segment-5xx" id="seg5xx" style="width: 0%;"></div>
+        </div>
+        <div class="legend" style="justify-content: space-between;">
+          <div class="legend-item"><span class="legend-color" style="background: var(--success-color);"></span> 2xx Success (<span id="lbl2xx">0%</span>)</div>
+          <div class="legend-item"><span class="legend-color" style="background: var(--warning-accent);"></span> 429 Rate Limited (<span id="lbl429">0%</span>)</div>
+          <div class="legend-item"><span class="legend-color" style="background: var(--error-color);"></span> 5xx Server Error (<span id="lbl5xx">0%</span>)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Backend Health Table -->
+    <section class="card">
+      <div class="panel-title">Backend Health & Performance</div>
+      <div class="table-responsive">
+        <table class="health-table">
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Status</th>
+              <th>Requests</th>
+              <th>Average latency</th>
+              <th>Error rate</th>
+              <th>Active connections</th>
+              <th>Rate-limited (429)</th>
+            </tr>
+          </thead>
+          <tbody id="healthTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--muted-text);">Loading backend status...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Bottom Section: Connection Comparison & Bandwidth -->
+    <section class="grid-2col">
+      <!-- Connection Comparison -->
+      <div class="card">
+        <div class="panel-title">Persistent connection (Keep-Alive) vs New TCP Connection</div>
+        <div class="comparison-container">
+          <div class="comparison-row">
+            <div class="comp-card">
+              <div class="comp-title">Persistent TCP Connection</div>
+              <div class="comp-value" id="compPersistentLat">0.0 ms</div>
+            </div>
+            <div class="comp-card">
+              <div class="comp-title">New Connection per Request</div>
+              <div class="comp-value" id="compNewConnLat">0.0 ms</div>
+            </div>
+          </div>
+          <div class="comp-diff">
+            Measured TCP Overhead Reduction: <span id="compDiffVal">0.0 ms</span>
+          </div>
+          <div class="explanation-note">
+            <strong>Networking Note:</strong> Persistent HTTP connections reuse existing TCP sockets, eliminating the 3-way handshake (SYN, SYN-ACK, ACK) latency penalty for repeated gateway-to-backend requests.
+          </div>
+        </div>
+      </div>
+
+      <!-- Bandwidth per Endpoint -->
+      <div class="card">
+        <div class="panel-title">Bandwidth usage by backend endpoint</div>
+        <div class="progress-list" id="bandwidthList">
+          <div style="color: var(--muted-text); font-size: 12px;">Waiting for metric data...</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

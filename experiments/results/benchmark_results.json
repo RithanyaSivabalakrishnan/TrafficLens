@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-10-09T10:57:35.725419+00:00",
+  "request_count": 50,
+  "persistent_median_latency_ms": 4.2,
+  "persistent_average_latency_ms": 4.5,
+  "new_connection_median_latency_ms": 18.7,
+  "new_connection_average_latency_ms": 19.2,
+  "overhead_saved_ms": 14.5
+}
