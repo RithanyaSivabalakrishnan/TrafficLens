@@ -194,6 +194,25 @@ def get_backend_health(db: Session) -> Dict[str, Any]:
             status = "Healthy"
             if latest_event and latest_event.new_state == "unhealthy":
                 status = "Down"
+                # Verify live health probe to heal stale unhealthy records if backend restarted
+                try:
+                    import urllib.request
+                    req = urllib.request.Request(f"{inst_url.rstrip('/')}/health", headers={"User-Agent": "TrafficLens-HealthCheck"})
+                    with urllib.request.urlopen(req, timeout=1.0) as resp:
+                        if resp.status == 200:
+                            status = "Healthy"
+                            event = BackendHealthEvent(
+                                service=svc_name,
+                                backend_url=inst_url,
+                                previous_state="unhealthy",
+                                new_state="healthy",
+                                reason="Recovered: HTTP 200 OK (verified by live probe)",
+                                created_at=_utc_now()
+                            )
+                            db.add(event)
+                            db.commit()
+                except Exception:
+                    status = "Down"
             elif avg_lat > 200.0 or err_rate > 10.0:
                 status = "Slow"
 

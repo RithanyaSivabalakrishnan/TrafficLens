@@ -319,6 +319,21 @@ function updateHealthTable(services) {
       </tr>
     `;
   }).join("");
+
+  // Keep Stop/Restart experiment button state in sync with actual backend health
+  const notifService = services.find(s => s.service === "notifications");
+  const btn = document.getElementById("btnStopToggle");
+  if (notifService && btn) {
+    if (notifService.status === "Down") {
+      stopEnabled = true;
+      btn.classList.add("active");
+      btn.innerText = "Restart Notifications service";
+    } else if (notifService.status === "Healthy" && stopEnabled) {
+      stopEnabled = false;
+      btn.classList.remove("active");
+      btn.innerText = "Stop Notifications service";
+    }
+  }
 }
 
 // 7. Connection Comparison

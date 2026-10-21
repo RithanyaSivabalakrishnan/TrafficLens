@@ -22,6 +22,8 @@ def create_service_app(service_name: str) -> FastAPI:
         
         # Handle experiment state for notification service failure
         if service_name == "notifications" and shared_state.notifications_stopped:
+            if request.url.path.startswith("/_experiment"):
+                return await call_next(request)
             if request.url.path == "/health":
                 return Response(content='{"status": "error", "detail": "Service stopped by experiment"}', status_code=500, media_type="application/json")
             raise HTTPException(status_code=503, detail="Notification Service unavailable (Experiment Stop Active)")

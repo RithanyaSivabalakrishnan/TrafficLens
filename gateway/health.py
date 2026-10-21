@@ -74,7 +74,8 @@ class HealthChecker:
             succ_count = self._consecutive_successes.get(instance, 0) + 1
             self._consecutive_successes[instance] = succ_count
 
-            if not currently_healthy and succ_count >= self.healthy_threshold:
+            was_unhealthy = (not currently_healthy) or self._is_last_event_unhealthy(instance)
+            if was_unhealthy and succ_count >= self.healthy_threshold:
                 self.registry.set_instance_health(instance, True)
                 self._record_event(service, instance, "unhealthy", "healthy", f"Recovered: {reason}")
                 logger.info(f"Backend {instance} for service {service} marked HEALTHY")
@@ -106,3 +107,16 @@ class HealthChecker:
                 db.close()
         except Exception as ex:
             logger.error(f"Failed to record health event in DB: {ex}")
+
+    def _is_last_event_unhealthy(self, backend_url: str) -> bool:
+        try:
+            db = SessionLocal()
+            try:
+                latest = db.query(BackendHealthEvent).filter(
+                    BackendHealthEvent.backend_url == backend_url
+                ).order_by(BackendHealthEvent.created_at.desc()).first()
+                return bool(latest and latest.new_state == "unhealthy")
+            finally:
+                db.close()
+        except Exception:
+            return False

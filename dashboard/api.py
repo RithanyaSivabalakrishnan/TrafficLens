@@ -94,6 +94,31 @@ async def api_experiment_stop(payload: ExperimentStopServiceRequest):
                 await client.post(f"{inst.rstrip('/')}/_experiment/stop-service", json=payload.dict())
             except Exception:
                 pass
+
+    # Record health state event to database for immediate dashboard synchronization
+    try:
+        from datetime import datetime, timezone
+        from gateway.database import SessionLocal
+        from gateway.models import BackendHealthEvent
+
+        db = SessionLocal()
+        try:
+            for inst in notify_instances:
+                event = BackendHealthEvent(
+                    service="notifications",
+                    backend_url=inst,
+                    previous_state="healthy" if payload.enabled else "unhealthy",
+                    new_state="unhealthy" if payload.enabled else "healthy",
+                    reason="Experiment: Service stopped via dashboard" if payload.enabled else "Experiment: Service restarted via dashboard",
+                    created_at=datetime.now(timezone.utc)
+                )
+                db.add(event)
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
+
     return {"enabled": payload.enabled}
 
 if __name__ == "__main__":
