@@ -4,11 +4,19 @@ let delayEnabled = false;
 let stopEnabled = false;
 let pollingInterval = null;
 
-document.addEventListener("DOMContentLoaded", () => {
+function startDashboard() {
   initTheme();
   fetchDashboardData();
-  pollingInterval = setInterval(fetchDashboardData, 1000);
-});
+  if (!pollingInterval) {
+    pollingInterval = setInterval(fetchDashboardData, 1000);
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startDashboard);
+} else {
+  startDashboard();
+}
 
 // Theme Management
 function initTheme() {
@@ -32,6 +40,14 @@ function updateThemeButtonLabel(theme) {
   }
 }
 
+function setKPIErrorState() {
+  const ids = ["kpiTotalRequests", "kpiRps", "kpiP50", "kpiP95", "kpiErrorRate", "kpiBandwidth"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = "--";
+  });
+}
+
 // Master Dashboard Refresh
 async function fetchDashboardData() {
   const liveDot = document.getElementById("liveDot");
@@ -39,25 +55,33 @@ async function fetchDashboardData() {
 
   try {
     const [summaryRes, latencyRes, throughputRes, distRes, statusRes, healthRes, bwRes, connRes] = await Promise.all([
-      fetch('/api/summary').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/latency-history').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/throughput-history').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/traffic-distribution').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/status-codes').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/backend-health').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/bandwidth').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/connection-comparison').then(r => r.ok ? r.json() : null).catch(() => null)
+      fetch('/api/summary', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/latency-history', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/throughput-history', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/traffic-distribution', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/status-codes', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/backend-health', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/bandwidth', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/connection-comparison', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
 
     const anySuccess = Boolean(summaryRes || latencyRes || throughputRes || distRes || statusRes || healthRes || bwRes || connRes);
 
     if (anySuccess) {
-      if (liveDot && liveText) {
-        liveDot.classList.remove("disconnected");
-        liveText.innerText = "Live (1s polling)";
+      if (summaryRes) {
+        if (liveDot && liveText) {
+          liveDot.classList.remove("disconnected");
+          liveText.innerText = "Live (1s polling)";
+        }
+        updateKPIs(summaryRes);
+      } else {
+        setKPIErrorState();
+        if (liveDot && liveText) {
+          liveDot.classList.add("disconnected");
+          liveText.innerText = "Metrics Unavailable";
+        }
       }
 
-      if (summaryRes) updateKPIs(summaryRes);
       if (latencyRes) renderLatencyChart(latencyRes.points || []);
       if (throughputRes) renderThroughputChart(throughputRes.points || []);
       if (distRes) renderTrafficDistribution(distRes.services || []);
@@ -70,6 +94,7 @@ async function fetchDashboardData() {
         liveDot.classList.add("disconnected");
         liveText.innerText = "API Disconnected";
       }
+      setKPIErrorState();
     }
 
   } catch (err) {
@@ -78,22 +103,60 @@ async function fetchDashboardData() {
       liveDot.classList.add("disconnected");
       liveText.innerText = "API Disconnected";
     }
+    setKPIErrorState();
   }
 }
 
 // 1. KPI Cards Updates
 function updateKPIs(data) {
-  document.getElementById("kpiTotalRequests").innerText = Number(data.total_requests || 0).toLocaleString();
-  document.getElementById("kpiRps").innerText = Number(data.requests_per_second || 0).toFixed(1);
-  document.getElementById("kpiP50").innerText = `${Math.round(data.p50_latency_ms || 0)} ms`;
-  document.getElementById("kpiP95").innerText = `${Math.round(data.p95_latency_ms || 0)} ms`;
-  document.getElementById("kpiErrorRate").innerText = `${Number(data.error_rate_percent || 0).toFixed(1)}%`;
-  
-  const bwBytes = data.total_bandwidth_bytes || 0;
-  if (bwBytes > 1024 * 1024) {
-    document.getElementById("kpiBandwidth").innerText = `${(bwBytes / (1024 * 1024)).toFixed(2)} MB`;
-  } else {
-    document.getElementById("kpiBandwidth").innerText = `${(bwBytes / 1024).toFixed(1)} KB`;
+  if (!data) {
+    setKPIErrorState();
+    return;
+  }
+
+  const elTotal = document.getElementById("kpiTotalRequests");
+  const elRps = document.getElementById("kpiRps");
+  const elP50 = document.getElementById("kpiP50");
+  const elP95 = document.getElementById("kpiP95");
+  const elErrorRate = document.getElementById("kpiErrorRate");
+  const elBandwidth = document.getElementById("kpiBandwidth");
+
+  if (elTotal) {
+    const val = data.total_requests;
+    elTotal.innerText = (val !== undefined && val !== null) ? Number(val).toLocaleString() : "--";
+  }
+
+  if (elRps) {
+    const val = data.requests_per_second;
+    elRps.innerText = (val !== undefined && val !== null) ? Number(val).toFixed(1) : "--";
+  }
+
+  if (elP50) {
+    const val = data.p50_latency_ms;
+    elP50.innerText = (val !== undefined && val !== null) ? `${Math.round(val)} ms` : "--";
+  }
+
+  if (elP95) {
+    const val = data.p95_latency_ms;
+    elP95.innerText = (val !== undefined && val !== null) ? `${Math.round(val)} ms` : "--";
+  }
+
+  if (elErrorRate) {
+    const val = data.error_rate_percent;
+    elErrorRate.innerText = (val !== undefined && val !== null) ? `${Number(val).toFixed(1)}%` : "--";
+  }
+
+  if (elBandwidth) {
+    const bwBytes = data.total_bandwidth_bytes;
+    if (bwBytes !== undefined && bwBytes !== null) {
+      if (bwBytes > 1024 * 1024) {
+        elBandwidth.innerText = `${(bwBytes / (1024 * 1024)).toFixed(2)} MB`;
+      } else {
+        elBandwidth.innerText = `${(bwBytes / 1024).toFixed(1)} KB`;
+      }
+    } else {
+      elBandwidth.innerText = "--";
+    }
   }
 }
 
