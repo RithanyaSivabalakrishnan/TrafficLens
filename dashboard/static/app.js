@@ -39,29 +39,38 @@ async function fetchDashboardData() {
 
   try {
     const [summaryRes, latencyRes, throughputRes, distRes, statusRes, healthRes, bwRes, connRes] = await Promise.all([
-      fetch('/api/summary').then(r => r.ok ? r.json() : null),
-      fetch('/api/latency-history').then(r => r.ok ? r.json() : null),
-      fetch('/api/throughput-history').then(r => r.ok ? r.json() : null),
-      fetch('/api/traffic-distribution').then(r => r.ok ? r.json() : null),
-      fetch('/api/status-codes').then(r => r.ok ? r.json() : null),
-      fetch('/api/backend-health').then(r => r.ok ? r.json() : null),
-      fetch('/api/bandwidth').then(r => r.ok ? r.json() : null),
-      fetch('/api/connection-comparison').then(r => r.ok ? r.json() : null)
+      fetch('/api/summary').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/latency-history').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/throughput-history').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/traffic-distribution').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/status-codes').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/backend-health').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/bandwidth').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/connection-comparison').then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
 
-    if (liveDot && liveText) {
-      liveDot.classList.remove("disconnected");
-      liveText.innerText = "Live (1s polling)";
-    }
+    const anySuccess = Boolean(summaryRes || latencyRes || throughputRes || distRes || statusRes || healthRes || bwRes || connRes);
 
-    if (summaryRes) updateKPIs(summaryRes);
-    if (latencyRes) renderLatencyChart(latencyRes.points || []);
-    if (throughputRes) renderThroughputChart(throughputRes.points || []);
-    if (distRes) renderTrafficDistribution(distRes.services || []);
-    if (statusRes) updateStatusCodes(statusRes.categories || []);
-    if (healthRes) updateHealthTable(healthRes.services || []);
-    if (bwRes) renderBandwidth(bwRes.services || []);
-    if (connRes) updateConnectionComparison(connRes);
+    if (anySuccess) {
+      if (liveDot && liveText) {
+        liveDot.classList.remove("disconnected");
+        liveText.innerText = "Live (1s polling)";
+      }
+
+      if (summaryRes) updateKPIs(summaryRes);
+      if (latencyRes) renderLatencyChart(latencyRes.points || []);
+      if (throughputRes) renderThroughputChart(throughputRes.points || []);
+      if (distRes) renderTrafficDistribution(distRes.services || []);
+      if (statusRes) updateStatusCodes(statusRes.categories || []);
+      if (healthRes) updateHealthTable(healthRes.services || []);
+      if (bwRes) renderBandwidth(bwRes.services || []);
+      if (connRes) updateConnectionComparison(connRes);
+    } else {
+      if (liveDot && liveText) {
+        liveDot.classList.add("disconnected");
+        liveText.innerText = "API Disconnected";
+      }
+    }
 
   } catch (err) {
     console.warn("Dashboard API polling warning:", err);
